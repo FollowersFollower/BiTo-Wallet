@@ -1,0 +1,89 @@
+import requests
+import json
+
+class MultiChainWallet:
+    def __init__(self):
+        self.wallets = {}
+
+    def create_wallet(self, chain):
+        if chain not in self.wallets:
+            self.wallets[chain] = {}
+        else:
+            print(f"A wallet for {chain} already exists.")
+
+    def get_address(self, chain):
+        if chain in self.wallets:
+            return self.wallets[chain].get("address", None)
+        else:
+            print(f"No wallet found for {chain}.")
+            return None
+
+    def generate_address(self, chain):
+        if chain in self.wallets:
+            if "address" in self.wallets[chain]:
+                print(f"A wallet for {chain} already has an address.")
+            else:
+                if chain == "BTC":
+                    url = "https://api.blockcypher.com/v1/btc/main/addrs"
+                    response = requests.post(url)
+                    if response.status_code == 201:
+                        address = json.loads(response.text)["address"]
+                        self.wallets[chain]["address"] = address
+                        print(f"New {chain} address generated: {address}")
+                    else:
+                        print("Failed to generate new address.")
+                # Add support for other chains here
+        else:
+            print(f"No wallet found for {chain}.")
+
+    def get_balance(self, chain):
+        if chain in self.wallets:
+            address = self.get_address(chain)
+            if address:
+                if chain == "BTC":
+                    url = f"https://api.blockcypher.com/v1/btc/main/addrs/{address}/balance"
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        balance = json.loads(response.text)["final_balance"]
+                        return balance / 100000000
+                    else:
+                        print("Failed to get balance.")
+                # Add support for other chains here
+            else:
+                print(f"No address found for {chain}.")
+        else:
+            print(f"No wallet found for {chain}.")
+
+    def send_transaction(self, chain, to_address, amount):
+        if chain in self.wallets:
+            address = self.get_address(chain)
+            if address:
+                if chain == "BTC":
+                    url = f"https://api.blockcypher.com/v1/btc/main/txs/new"
+                    response = requests.post(url, json={"inputs": [{"addresses": [address]}], "outputs": [{"addresses": [to_address], "value": int(amount * 100000000)}]})
+                    if response.status_code == 201:
+                        transaction = json.loads(response.text)
+                        private_keys = [self.wallets[chain]["private_key"]]
+                        for i, _input in enumerate(transaction["inputs"]):
+                            url = f"https://api.blockcypher.com/v1/btc/main/txs/sign?input_index={i}&private_keys={','.join(private_keys)}"
+                            response = requests.post(url, json=transaction)
+                            transaction = json.loads(response.text)
+                        url = "https://api.blockcypher.com/v1/btc/main/txs/send"
+                        response = requests.post(url, json=transaction)
+                        if response.status_code == 201:
+                            print("Transaction sent!")
+                            return True
+                        else:
+                            print("Failed to send transaction.")
+                            return False
+                    else:
+                        print("Failed to create new transaction.")
+                        return False
+                # Add support for other chains here
+            else:
+                print(f"No address found for {chain}.")
+                return False
+        else:
+            print(f"No wallet found for {chain}.")
+            return
+
